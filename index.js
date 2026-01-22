@@ -32,8 +32,7 @@ const verifyJWT = (req, res, next) => {
 };
 
 // ================= MongoDB =================
-const uri = `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@cluster0.4jfw6yd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-
+const uri = `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@cluster0.bou0ahg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
