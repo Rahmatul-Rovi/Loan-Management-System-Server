@@ -97,6 +97,15 @@ app.patch("/applications/approve/:id", async (req, res) => {
   res.send({ success: true });
 });
 
+app.patch("/applications/reject/:id", async (req, res) => {
+  await applications.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { status: "rejected" } }
+  );
+  res.send({ success: true });
+});
+
+
 // Create Stripe Payment Intent (User repay)
 app.post("/create-payment-intent", async (req, res) => {
   const { price } = req.body;
