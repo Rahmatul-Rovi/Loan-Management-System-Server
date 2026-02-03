@@ -4,6 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -76,31 +77,48 @@ app.get("/", (req, res) => {
   res.send("🚀 Server Running (Test DB)");
 });
 
-// পেমেন্ট ইনটেন্ট তৈরি (Backend)
+// Approve + Disburse (Admin)
+app.patch("/applications/approve/:id", async (req, res) => {
+  const { repayAmount, deadline } = req.body;
+
+  await applications.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    {
+      $set: {
+        status: "disbursed",
+        repayAmount,
+        deadline,
+        repayStatus: "unpaid",
+        disbursedAt: new Date()
+      }
+    }
+  );
+
+  res.send({ success: true });
+});
+
+// Create Stripe Payment Intent (User repay)
 app.post("/create-payment-intent", async (req, res) => {
   const { price } = req.body;
-  if (!price) return res.send({ message: "Price not found" });
-
-  const amount = parseInt(price * 100); // সেন্টে কনভার্ট
 
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: amount,
+    amount: price * 100,
     currency: "usd",
-    payment_method_types: ["card"],
+    payment_method_types: ["card"]
   });
 
   res.send({ clientSecret: paymentIntent.client_secret });
 });
 
-// পেমেন্ট সাকসেস হলে স্ট্যাটাস আপডেট
-app.patch("/applications/pay/:id", async (req, res) => {
-  const id = req.params.id;
-  const result = await applicationsCollection.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: { feeStatus: "paid" } }
+// Mark repaid
+app.patch("/applications/repay/:id", async (req, res) => {
+  await applications.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { repayStatus: "paid" } }
   );
-  res.send(result);
+  res.send({ success: true });
 });
+
 
 // =================================================
 // AUTH
