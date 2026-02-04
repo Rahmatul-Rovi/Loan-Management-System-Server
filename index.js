@@ -46,6 +46,7 @@ let applicationsCollection;
 let usersCollection;
 let db;
 
+
 /**
  * DATABASE CONNECTION MIDDLEWARE
  * Essential for Vercel Serverless environment.
@@ -107,16 +108,27 @@ app.patch("/applications/reject/:id", async (req, res) => {
 
 
 // Create Stripe Payment Intent (User repay)
+// Create Stripe Payment Intent (User repay)
 app.post("/create-payment-intent", async (req, res) => {
-  const { price } = req.body;
+  // CHANGED: 'price' এর বদলে 'amount' রিসিভ করো কারণ ফ্রন্টএন্ড থেকে এটাই পাঠাচ্ছ
+  const { amount } = req.body;
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: price * 100,
-    currency: "usd",
-    payment_method_types: ["card"]
-  });
+  if (!amount || isNaN(amount)) {
+    return res.status(400).send({ message: "Invalid amount provided" });
+  }
 
-  res.send({ clientSecret: paymentIntent.client_secret });
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // সেন্টে কনভার্ট (রাউন্ড ফিগার রাখা ভালো)
+      currency: "usd",
+      payment_method_types: ["card"]
+    });
+
+    res.send({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error("Stripe Error:", error.message);
+    res.status(500).send({ error: error.message });
+  }
 });
 
 // Mark repaid
@@ -332,6 +344,29 @@ app.patch("/applications/:id/approve", async (req, res) => {
     res.status(500).send({ error: "Failed to approve loan" });
   }
 });
+
+// Mark application fee paid (User repayment success)
+app.patch("/applications/pay/:id", async (req, res) => {
+  try {
+    await applicationsCollection.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      {
+        $set: {
+          feeStatus: "paid",
+          repayStatus: "paid",
+          paidAt: new Date(),
+        },
+      }
+    );
+
+    res.send({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to mark payment as paid" });
+  }
+});
+
+
 
 app.patch("/applications/:id/reject", async (req, res) => {
   try {
