@@ -325,25 +325,38 @@ app.get("/applications/:email", async (req, res) => {
   }
 });
 
-app.patch("/applications/:id/approve", async (req, res) => {
+app.patch("/applications/approve/:id", async (req, res) => {
   try {
-    const { id } = req.params;
+    const { repayAmount, deadline } = req.body;
+
+    if (!repayAmount || !deadline) {
+      return res.status(400).send({ message: "repayAmount & deadline required" });
+    }
 
     const result = await applicationsCollection.updateOne(
-      { _id: new ObjectId(id) },
+      { _id: new ObjectId(req.params.id) },
       {
         $set: {
           status: "approved",
+          repayAmount,
+          deadline,
+          repayStatus: "unpaid",
           approvedAt: new Date(),
         },
-      },
+      }
     );
 
-    res.send({ success: true, result });
-  } catch (error) {
-    res.status(500).send({ error: "Failed to approve loan" });
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: "Application not found" });
+    }
+
+    res.send({ success: true, message: "Approved successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Approve failed", error: err.message });
   }
 });
+
 
 // Mark application fee paid (User repayment success)
 app.patch("/applications/pay/:id", async (req, res) => {
@@ -365,6 +378,90 @@ app.patch("/applications/pay/:id", async (req, res) => {
     res.status(500).send({ message: "Failed to mark payment as paid" });
   }
 });
+
+
+// Admin sends money to user (Stripe Checkout)
+app.post("/payment/admin/send/:applicationId", async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+
+    const appData = await applicationsCollection.findOne({
+      _id: new ObjectId(applicationId),
+    });
+
+    if (!appData) {
+      return res.status(404).send({ message: "Application not found" });
+    }
+
+    const amount = Number(appData.loanAmount);
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Loan Disbursement to ${appData.fullName}`,
+            },
+            unit_amount: amount * 100,
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: "http://localhost:5173/admin/disburse-success",
+      cancel_url: "http://localhost:5173/admin/disburse-cancel",
+    });
+
+    res.send({ url: session.url });
+  } catch (error) {
+    console.error("Stripe Admin Send Error:", error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// User repays loan (Stripe Checkout)
+app.post("/payment/user/repay/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const appData = await applicationsCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!appData) {
+      return res.status(404).send({ message: "Application not found" });
+    }
+
+    const amount = Number(appData.repayAmount);
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Loan Repayment - ${appData.loanTitle}`,
+            },
+            unit_amount: amount * 100,
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `http://localhost:5173/payment-success/${id}`,
+      cancel_url: `http://localhost:5173/payment-cancel`,
+    });
+
+    res.send({ url: session.url });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
 
 
 
