@@ -78,24 +78,38 @@ app.get("/", (req, res) => {
   res.send("🚀 Server Running (Test DB)");
 });
 
-// Approve + Disburse (Admin)
+// Cleaned Approve Route (Replace lines 80-100 with this)
 app.patch("/applications/approve/:id", async (req, res) => {
-  const { repayAmount, deadline } = req.body;
-
-  await applications.updateOne(
-    { _id: new ObjectId(req.params.id) },
-    {
-      $set: {
-        status: "disbursed",
-        repayAmount,
-        deadline,
-        repayStatus: "unpaid",
-        disbursedAt: new Date()
-      }
+  try {
+    const { repayAmount, deadline } = req.body;
+    
+    // ভ্যালিডেশন চেক
+    if (!repayAmount || !deadline) {
+      return res.status(400).send({ success: false, message: "Amount and Deadline required" });
     }
-  );
 
-  res.send({ success: true });
+    const result = await applicationsCollection.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      {
+        $set: {
+          status: "approved", 
+          repayAmount: Number(repayAmount),
+          deadline: deadline,
+          repayStatus: "unpaid",
+          approvedAt: new Date()
+        }
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.send({ success: true, message: "Loan approved successfully" });
+    } else {
+      res.status(404).send({ success: false, message: "Application not found or already approved" });
+    }
+  } catch (err) {
+    console.error("Approve Error:", err);
+    res.status(500).send({ success: false, message: "Internal server error" });
+  }
 });
 
 app.patch("/applications/reject/:id", async (req, res) => {
