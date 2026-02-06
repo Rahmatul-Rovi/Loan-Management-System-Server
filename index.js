@@ -46,7 +46,6 @@ let applicationsCollection;
 let usersCollection;
 let db;
 
-
 /**
  * DATABASE CONNECTION MIDDLEWARE
  * Essential for Vercel Serverless environment.
@@ -82,29 +81,36 @@ app.get("/", (req, res) => {
 app.patch("/applications/approve/:id", async (req, res) => {
   try {
     const { repayAmount, deadline } = req.body;
-    
+
     // ভ্যালিডেশন চেক
     if (!repayAmount || !deadline) {
-      return res.status(400).send({ success: false, message: "Amount and Deadline required" });
+      return res
+        .status(400)
+        .send({ success: false, message: "Amount and Deadline required" });
     }
 
     const result = await applicationsCollection.updateOne(
       { _id: new ObjectId(req.params.id) },
       {
         $set: {
-          status: "approved", 
+          status: "approved",
           repayAmount: Number(repayAmount),
           deadline: deadline,
           repayStatus: "unpaid",
-          approvedAt: new Date()
-        }
-      }
+          approvedAt: new Date(),
+        },
+      },
     );
 
     if (result.modifiedCount > 0) {
       res.send({ success: true, message: "Loan approved successfully" });
     } else {
-      res.status(404).send({ success: false, message: "Application not found or already approved" });
+      res
+        .status(404)
+        .send({
+          success: false,
+          message: "Application not found or already approved",
+        });
     }
   } catch (err) {
     console.error("Approve Error:", err);
@@ -115,11 +121,10 @@ app.patch("/applications/approve/:id", async (req, res) => {
 app.patch("/applications/reject/:id", async (req, res) => {
   await applications.updateOne(
     { _id: new ObjectId(req.params.id) },
-    { $set: { status: "rejected" } }
+    { $set: { status: "rejected" } },
   );
   res.send({ success: true });
 });
-
 
 // Create Stripe Payment Intent (User repay)
 // Create Stripe Payment Intent (User repay)
@@ -135,7 +140,7 @@ app.post("/create-payment-intent", async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // সেন্টে কনভার্ট (রাউন্ড ফিগার রাখা ভালো)
       currency: "usd",
-      payment_method_types: ["card"]
+      payment_method_types: ["card"],
     });
 
     res.send({ clientSecret: paymentIntent.client_secret });
@@ -149,11 +154,10 @@ app.post("/create-payment-intent", async (req, res) => {
 app.patch("/applications/repay/:id", async (req, res) => {
   await applications.updateOne(
     { _id: new ObjectId(req.params.id) },
-    { $set: { repayStatus: "paid" } }
+    { $set: { repayStatus: "paid" } },
   );
   res.send({ success: true });
 });
-
 
 // =================================================
 // AUTH
@@ -344,7 +348,9 @@ app.patch("/applications/approve/:id", async (req, res) => {
     const { repayAmount, deadline } = req.body;
 
     if (!repayAmount || !deadline) {
-      return res.status(400).send({ message: "repayAmount & deadline required" });
+      return res
+        .status(400)
+        .send({ message: "repayAmount & deadline required" });
     }
 
     const result = await applicationsCollection.updateOne(
@@ -357,7 +363,7 @@ app.patch("/applications/approve/:id", async (req, res) => {
           repayStatus: "unpaid",
           approvedAt: new Date(),
         },
-      }
+      },
     );
 
     if (result.matchedCount === 0) {
@@ -371,7 +377,6 @@ app.patch("/applications/approve/:id", async (req, res) => {
   }
 });
 
-
 // Mark application fee paid (User repayment success)
 app.patch("/applications/pay/:id", async (req, res) => {
   try {
@@ -383,7 +388,7 @@ app.patch("/applications/pay/:id", async (req, res) => {
           repayStatus: "paid",
           paidAt: new Date(),
         },
-      }
+      },
     );
 
     res.send({ success: true });
@@ -393,14 +398,16 @@ app.patch("/applications/pay/:id", async (req, res) => {
   }
 });
 
-
 // Admin sends money to user (Stripe Checkout)
 app.post("/payment/admin/send/:applicationId", async (req, res) => {
   try {
     const { applicationId } = req.params;
-    const appData = await applicationsCollection.findOne({ _id: new ObjectId(applicationId) });
+    const appData = await applicationsCollection.findOne({
+      _id: new ObjectId(applicationId),
+    });
 
-    if (!appData) return res.status(404).send({ message: "Application not found" });
+    if (!appData)
+      return res.status(404).send({ message: "Application not found" });
 
     const amount = Number(appData.loanAmount);
 
@@ -408,14 +415,14 @@ app.post("/payment/admin/send/:applicationId", async (req, res) => {
       payment_method_types: ["card"],
       mode: "payment",
       // আপনার ডাটাবেসে কি-এর নাম 'borrowerEmail', তাই এখানে সেটাই হবে
-      customer_email: appData.borrowerEmail, 
+      customer_email: appData.borrowerEmail,
       line_items: [
         {
           price_data: {
             currency: "usd",
-            product_data: { 
+            product_data: {
               name: `Loan Disbursement to ${appData.fullName}`,
-              description: `Loan ID: ${appData.loanId}`
+              description: `Loan ID: ${appData.loanId}`,
             },
             unit_amount: amount * 100,
           },
@@ -423,8 +430,8 @@ app.post("/payment/admin/send/:applicationId", async (req, res) => {
         },
       ],
       // সফল হলে স্ট্যাটাস চেঞ্জ করার জন্য আইডি সহ সাকসেস ইউআরএল
-      success_url: `http://localhost:3000/payment/admin/success/${applicationId}`, 
-      cancel_url: "http://localhost:5173/admin/disburse-cancel",
+      success_url: `http://localhost:3000/payment/admin/success/${applicationId}`,
+      cancel_url: `http://localhost:5173/dashboard/manager/pending-application`,
     });
 
     res.send({ url: session.url });
@@ -432,7 +439,6 @@ app.post("/payment/admin/send/:applicationId", async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
-
 
 // User repays loan (Stripe Checkout)
 app.post("/payment/user/repay/:id", async (req, res) => {
@@ -464,8 +470,9 @@ app.post("/payment/user/repay/:id", async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: `http://localhost:5173/payment-success/${id}`,
-      cancel_url: `http://localhost:5173/payment-cancel`,
+      // ✅ ৩৫০ নাম্বার লাইনের আশেপাশে success_url পরিবর্তন করুন:
+      success_url: `http://localhost:5173/dashboard/payment-history`, // বা আপনার সাকসেস পেজ
+      cancel_url: `http://localhost:5173/dashboard/my-applications`,
     });
 
     res.send({ url: session.url });
@@ -476,27 +483,25 @@ app.post("/payment/user/repay/:id", async (req, res) => {
 });
 
 //Admin payment success
+// Admin payment success
 app.get("/payment/admin/success/:id", async (req, res) => {
   try {
     const id = req.params.id;
     await applicationsCollection.updateOne(
       { _id: new ObjectId(id) },
-      { 
-        $set: { 
-          status: "disbursed", // স্ট্যাটাস পরিবর্তন
-          disbursedAt: new Date() 
-        } 
-      }
+      {
+        $set: {
+          status: "disbursed", 
+          disbursedAt: new Date(),
+        },
+      },
     );
-    // পেমেন্ট শেষে অ্যাডমিনকে রিডাইরেক্ট করে ম্যানেজারের পেইজে পাঠিয়ে দিন
-    res.redirect("http://localhost:5173/dashboard/manager-approve"); 
+    // ✅ আপনার ফ্রন্টএন্ড রাউট অনুযায়ী সঠিক পাথ:
+    res.redirect("http://localhost:5173/dashboard/manager/approve-application");
   } catch (err) {
     res.status(500).send("Error updating status");
   }
 });
-
-
-
 
 app.patch("/applications/:id/reject", async (req, res) => {
   try {
