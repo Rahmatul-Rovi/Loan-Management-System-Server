@@ -398,42 +398,41 @@ app.patch("/applications/pay/:id", async (req, res) => {
 app.post("/payment/admin/send/:applicationId", async (req, res) => {
   try {
     const { applicationId } = req.params;
+    const appData = await applicationsCollection.findOne({ _id: new ObjectId(applicationId) });
 
-    const appData = await applicationsCollection.findOne({
-      _id: new ObjectId(applicationId),
-    });
-
-    if (!appData) {
-      return res.status(404).send({ message: "Application not found" });
-    }
+    if (!appData) return res.status(404).send({ message: "Application not found" });
 
     const amount = Number(appData.loanAmount);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
+      // আপনার ডাটাবেসে কি-এর নাম 'borrowerEmail', তাই এখানে সেটাই হবে
+      customer_email: appData.borrowerEmail, 
       line_items: [
         {
           price_data: {
             currency: "usd",
-            product_data: {
+            product_data: { 
               name: `Loan Disbursement to ${appData.fullName}`,
+              description: `Loan ID: ${appData.loanId}`
             },
             unit_amount: amount * 100,
           },
           quantity: 1,
         },
       ],
-      success_url: "http://localhost:5173/admin/disburse-success",
+      // সফল হলে স্ট্যাটাস চেঞ্জ করার জন্য আইডি সহ সাকসেস ইউআরএল
+      success_url: `http://localhost:3000/payment/admin/success/${applicationId}`, 
       cancel_url: "http://localhost:5173/admin/disburse-cancel",
     });
 
     res.send({ url: session.url });
   } catch (error) {
-    console.error("Stripe Admin Send Error:", error);
     res.status(500).send({ error: error.message });
   }
 });
+
 
 // User repays loan (Stripe Checkout)
 app.post("/payment/user/repay/:id", async (req, res) => {
@@ -473,6 +472,26 @@ app.post("/payment/user/repay/:id", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send({ error: error.message });
+  }
+});
+
+//Admin payment success
+app.get("/payment/admin/success/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    await applicationsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          status: "disbursed", // স্ট্যাটাস পরিবর্তন
+          disbursedAt: new Date() 
+        } 
+      }
+    );
+    // পেমেন্ট শেষে অ্যাডমিনকে রিডাইরেক্ট করে ম্যানেজারের পেইজে পাঠিয়ে দিন
+    res.redirect("http://localhost:5173/dashboard/manager-approve"); 
+  } catch (err) {
+    res.status(500).send("Error updating status");
   }
 });
 
