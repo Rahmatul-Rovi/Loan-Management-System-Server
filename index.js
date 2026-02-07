@@ -44,6 +44,7 @@ const client = new MongoClient(uri, {
 let loansCollection;
 let applicationsCollection;
 let usersCollection;
+let transactionsCollection;
 let db;
 
 /**
@@ -59,6 +60,7 @@ async function connectDB(req, res, next) {
       loansCollection = db.collection("Loans");
       applicationsCollection = db.collection("Applications");
       usersCollection = db.collection("Users");
+      transactionsCollection = db.collection("Transactions");
       console.log("✅ MongoDB Connected to database: test");
     }
     next();
@@ -378,25 +380,61 @@ app.patch("/applications/approve/:id", async (req, res) => {
 });
 
 // Mark application fee paid (User repayment success)
+// Payment recording route (Update your existing /applications/pay/:id)
+// Example logic in your backend PATCH route
+// Payment recording route
 app.patch("/applications/pay/:id", async (req, res) => {
   try {
-    await applicationsCollection.updateOne(
-      { _id: new ObjectId(req.params.id) },
-      {
-        $set: {
-          feeStatus: "paid",
-          repayStatus: "paid",
-          paidAt: new Date(),
-        },
-      },
-    );
+    const id = req.params.id;
+    const paymentData = req.body; // Expecting { transactionId, amount, email }
 
-    res.send({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: "Failed to mark payment as paid" });
+    // 1. Update the application status to paid
+    const filter = { _id: new ObjectId(id) };
+    const updateResult = await applicationsCollection.updateOne(filter, { 
+      $set: { 
+        repayStatus: "paid",
+        paidAt: new Date() 
+      } 
+    });
+
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).send({ message: "Application not found" });
+    }
+
+    // 2. Save payment details in 'transactions' collection
+    const transactionRecord = {
+      loanId: id,
+      transactionId: paymentData.transactionId,
+      amount: Number(paymentData.amount),
+      userEmail: paymentData.email,
+      date: new Date(),
+      status: "Success"
+    };
+    
+    // Using the newly defined transactionsCollection
+    const result = await transactionsCollection.insertOne(transactionRecord);
+    
+    res.send({ success: true, transactionId: result.insertedId });
+  } catch (error) {
+    console.error("Payment Record Error:", error);
+    res.status(500).send({ message: "Internal Server Error" });
   }
 });
+
+// GET route to fetch transaction history for a specific user
+app.get("/transactions/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    const query = { userEmail: email };
+    // Sort by date descending (Newest first)
+    const result = await transactionsCollection.find(query).sort({ date: -1 }).toArray();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: "Error fetching transactions" });
+  }
+});
+
+
 
 // Admin sends money to user (Stripe Checkout)
 app.post("/payment/admin/send/:applicationId", async (req, res) => {
