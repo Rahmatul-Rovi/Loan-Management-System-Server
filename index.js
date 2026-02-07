@@ -675,6 +675,41 @@ app.patch("/users/:id", verifyJWT, async (req, res) => {
   }
 });
 
+
+// Admin Dashboard Stats - API
+app.get("/admin-stats", async (req, res) => {
+  try {
+    // ১. স্ট্যাটাস অনুযায়ী কাউন্ট
+    const statusStats = await applicationsCollection.aggregate([
+      { $group: { _id: "$status", value: { $sum: 1 } } }
+    ]).toArray();
+
+    // ২. টোটাল অ্যামাউন্ট ক্যালকুলেশন
+    const amountStats = await applicationsCollection.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalLoaned: { $sum: { $toDouble: "$loanAmount" } },
+          totalRepayable: { $sum: { $toDouble: "$repayAmount" } }
+        }
+      }
+    ]).toArray();
+
+    const chartData = statusStats.map(item => ({
+      name: item._id.charAt(0).toUpperCase() + item._id.slice(1),
+      value: item.value
+    }));
+
+    res.send({
+      chartData,
+      totals: amountStats[0] || { totalLoaned: 0, totalRepayable: 0 }
+    });
+  } catch (error) {
+    res.status(500).send({ message: "Error" });
+  }
+});
+
+
 // ================= START =================
 app.listen(port, () => {
   console.log(`✅ Server running on port ${port}`);
