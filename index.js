@@ -329,6 +329,7 @@ app.post("/apply-loan", async (req, res) => {
   res.send({ applicationId: result.insertedId });
 });
 
+// --- ব্যাকএন্ডের অ্যাপ্লিকেশন গেট রাউট আপডেট ---
 app.get("/applications/:email", async (req, res) => {
   const email = req.params.email?.trim();
   if (!email) return res.send([]);
@@ -338,7 +339,30 @@ app.get("/applications/:email", async (req, res) => {
       .find({ borrowerEmail: { $regex: `^${email}$`, $options: "i" } })
       .toArray();
 
-    res.send(applications);
+    //  লেট পেনাল্টি ক্যালকুলেশন লজিক
+    const updatedApps = applications.map(app => {
+      if (app.status === "disbursed" && app.repayStatus !== "paid" && app.deadline) {
+        const today = new Date();
+        const deadlineDate = new Date(app.deadline);
+
+        if (today > deadlineDate) {
+          // কয়দিন দেরি হয়েছে বের করা
+          const diffTime = Math.abs(today - deadlineDate);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          const penaltyPerDay = 10; // প্রতিদিন ১০ ডলার জরিমানা (আপনি চাইলে কমাতে পারেন)
+          const totalPenalty = diffDays * penaltyPerDay;
+          
+          // নতুন প্রোপার্টি যোগ করা
+          app.isOverdue = true;
+          app.penaltyAmount = totalPenalty;
+          app.payableWithPenalty = Number(app.repayAmount) + totalPenalty;
+        }
+      }
+      return app;
+    });
+
+    res.send(updatedApps);
   } catch (error) {
     console.error("Error fetching applications:", error);
     res.status(500).send({ message: "Server error" });
