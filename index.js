@@ -520,7 +520,6 @@ app.post("/payment/user/repay/:id", async (req, res) => {
   }
 });
 
-//Admin payment success
 // Admin payment success
 app.get("/payment/admin/success/:id", async (req, res) => {
   try {
@@ -534,7 +533,7 @@ app.get("/payment/admin/success/:id", async (req, res) => {
         },
       },
     );
-    // ✅ আপনার ফ্রন্টএন্ড রাউট অনুযায়ী সঠিক পাথ:
+    // Frontend Route
     res.redirect("http://localhost:5173/dashboard/manager/approve-application");
   } catch (err) {
     res.status(500).send("Error updating status");
@@ -675,16 +674,42 @@ app.patch("/users/:id", verifyJWT, async (req, res) => {
   }
 });
 
+// Update User Profile (Admin/Manager/Borrower)
+app.patch("/users/update/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    const { name, photoURL } = req.body;
+    
+    const filter = { email: email };
+    const updateDoc = {
+      $set: {
+        name: name,
+        photoURL: photoURL,
+        updatedAt: new Date()
+      },
+    };
+
+    const result = await usersCollection.updateOne(filter, updateDoc);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    res.send({ success: true, message: "Profile updated successfully" });
+  } catch (error) {
+    console.error("Profile Update Error:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
 
 // Admin Dashboard Stats - API
 app.get("/admin-stats", async (req, res) => {
   try {
-    // ১. স্ট্যাটাস অনুযায়ী কাউন্ট
     const statusStats = await applicationsCollection.aggregate([
       { $group: { _id: "$status", value: { $sum: 1 } } }
     ]).toArray();
 
-    // ২. টোটাল অ্যামাউন্ট ক্যালকুলেশন
+    // Total amount Calculation
     const amountStats = await applicationsCollection.aggregate([
       {
         $group: {
