@@ -45,6 +45,7 @@ let loansCollection;
 let applicationsCollection;
 let usersCollection;
 let transactionsCollection;
+let reviewsCollection;
 let db;
 
 /**
@@ -61,6 +62,7 @@ async function connectDB(req, res, next) {
       applicationsCollection = db.collection("Applications");
       usersCollection = db.collection("Users");
       transactionsCollection = db.collection("Transactions");
+      reviewsCollection = db.collection("Reviews");
       console.log("✅ MongoDB Connected to database: test");
     }
     next();
@@ -755,6 +757,42 @@ app.get("/admin-stats", async (req, res) => {
     });
   } catch (error) {
     res.status(500).send({ message: "Error" });
+  }
+});
+
+
+// =================================================
+// REVIEWS & RATINGS
+// =================================================
+
+// 1. Save a new review
+app.post("/reviews", async (req, res) => {
+  try {
+    const review = {
+      ...req.body,
+      // রেটিং যদি স্ট্রিং হিসেবে আসে তবে সেটাকে নাম্বার করে দিচ্ছি 
+      // যাতে ফ্রন্টএন্ডে স্টার দেখাতে সুবিধা হয়
+      rating: Number(req.body.rating), 
+      createdAt: new Date()
+    };
+    
+    const result = await reviewsCollection.insertOne(review);
+    res.send({ success: true, insertedId: result.insertedId });
+  } catch (error) {
+    console.error("Review Post Error:", error);
+    res.status(500).send({ message: "Failed to post review" });
+  }
+});
+
+// 2. Get all reviews for Home Page
+app.get("/reviews", async (req, res) => {
+  try {
+    const reviewsCollection = db.collection("Reviews");
+    // Sort by newest first
+    const result = await reviewsCollection.find().sort({ createdAt: -1 }).toArray();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: "Error fetching reviews" });
   }
 });
 
