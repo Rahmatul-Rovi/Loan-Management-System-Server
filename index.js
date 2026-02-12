@@ -63,11 +63,11 @@ async function connectDB(req, res, next) {
       usersCollection = db.collection("Users");
       transactionsCollection = db.collection("Transactions");
       reviewsCollection = db.collection("Reviews");
-      console.log("✅ MongoDB Connected to database: test");
+      console.log(" MongoDB Connected to database: test");
     }
     next();
   } catch (err) {
-    console.error("❌ MongoDB Connection Error:", err);
+    console.error(" MongoDB Connection Error:", err);
     res
       .status(500)
       .send({ message: "Internal Server Error: Database Connection Failed" });
@@ -78,7 +78,7 @@ async function connectDB(req, res, next) {
 app.use(connectDB);
 
 app.get("/", (req, res) => {
-  res.send("🚀 Server Running (Test DB)");
+  res.send(" Server Running (Test DB)");
 });
 
 // Cleaned Approve Route (Replace lines 80-100 with this)
@@ -86,7 +86,7 @@ app.patch("/applications/approve/:id", async (req, res) => {
   try {
     const { repayAmount, deadline } = req.body;
 
-    // ভ্যালিডেশন চেক
+    // Validation Check
     if (!repayAmount || !deadline) {
       return res
         .status(400)
@@ -133,7 +133,6 @@ app.patch("/applications/reject/:id", async (req, res) => {
 // Create Stripe Payment Intent (User repay)
 // Create Stripe Payment Intent (User repay)
 app.post("/create-payment-intent", async (req, res) => {
-  // CHANGED: 'price' এর বদলে 'amount' রিসিভ করো কারণ ফ্রন্টএন্ড থেকে এটাই পাঠাচ্ছ
   const { amount } = req.body;
 
   if (!amount || isNaN(amount)) {
@@ -142,7 +141,7 @@ app.post("/create-payment-intent", async (req, res) => {
 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // সেন্টে কনভার্ট (রাউন্ড ফিগার রাখা ভালো)
+      amount: Math.round(amount * 100), // Convert to cents
       currency: "usd",
       payment_method_types: ["card"],
     });
@@ -164,7 +163,7 @@ app.patch("/applications/repay/:id", async (req, res) => {
 });
 
 // =================================================
-// AUTH
+//          AUTH
 // =================================================
 
 app.post("/register", async (req, res) => {
@@ -196,7 +195,7 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  // ---------------- Admin ----------------
+  // -------------- Admin ----------------
   if (
     email === process.env.ADMIN_EMAIL &&
     password === process.env.ADMIN_PASSWORD
@@ -249,7 +248,7 @@ app.get("/users/by-email", async (req, res) => {
 });
 
 // =================================================
-// LOANS
+//            LOANS
 // =================================================
 
 app.get("/loans", async (req, res) => {
@@ -317,7 +316,7 @@ app.delete("/loans/:id", async (req, res) => {
 });
 
 // =================================================
-// APPLICATIONS
+//          APPLICATIONS
 // =================================================
 
 app.post("/apply-loan", async (req, res) => {
@@ -331,7 +330,7 @@ app.post("/apply-loan", async (req, res) => {
   res.send({ applicationId: result.insertedId });
 });
 
-// --- ব্যাকএন্ডের অ্যাপ্লিকেশন গেট রাউট আপডেট ---
+// --- Backend Application get route Update ---
 app.get("/applications/:email", async (req, res) => {
   const email = req.params.email?.trim();
   if (!email) return res.send([]);
@@ -341,21 +340,21 @@ app.get("/applications/:email", async (req, res) => {
       .find({ borrowerEmail: { $regex: `^${email}$`, $options: "i" } })
       .toArray();
 
-    //  লেট পেনাল্টি ক্যালকুলেশন লজিক
+    //  Late Penalty Calculation Logic
     const updatedApps = applications.map(app => {
       if (app.status === "disbursed" && app.repayStatus !== "paid" && app.deadline) {
         const today = new Date();
         const deadlineDate = new Date(app.deadline);
 
         if (today > deadlineDate) {
-          // কয়দিন দেরি হয়েছে বের করা
+          // Calculate How many days late
           const diffTime = Math.abs(today - deadlineDate);
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           
-          const penaltyPerDay = 10; // প্রতিদিন ১০ ডলার জরিমানা (আপনি চাইলে কমাতে পারেন)
+          const penaltyPerDay = 10; // Penalty per days 100tk
           const totalPenalty = diffDays * penaltyPerDay;
           
-          // নতুন প্রোপার্টি যোগ করা
+          // Add new propoerty
           app.isOverdue = true;
           app.penaltyAmount = totalPenalty;
           app.payableWithPenalty = Number(app.repayAmount) + totalPenalty;
@@ -793,6 +792,21 @@ app.get("/reviews", async (req, res) => {
     res.send(result);
   } catch (error) {
     res.status(500).send({ message: "Error fetching reviews" });
+  }
+});
+
+// অ্যাডমিন যেন রিভিউ ডিলিট করতে পারে
+app.delete("/reviews/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await reviewsCollection.deleteOne({ _id: new ObjectId(id) });
+    if (result.deletedCount > 0) {
+      res.send({ success: true, message: "Review deleted successfully" });
+    } else {
+      res.status(404).send({ success: false, message: "Review not found" });
+    }
+  } catch (error) {
+    res.status(500).send({ message: "Server error" });
   }
 });
 
