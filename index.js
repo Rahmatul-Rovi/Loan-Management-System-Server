@@ -477,7 +477,6 @@ app.post("/payment/admin/send/:applicationId", async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
-      // আপনার ডাটাবেসে কি-এর নাম 'borrowerEmail', তাই এখানে সেটাই হবে
       customer_email: appData.borrowerEmail,
       line_items: [
         {
@@ -492,7 +491,7 @@ app.post("/payment/admin/send/:applicationId", async (req, res) => {
           quantity: 1,
         },
       ],
-      // সফল হলে স্ট্যাটাস চেঞ্জ করার জন্য আইডি সহ সাকসেস ইউআরএল
+      // Success URl for status change
       success_url: `http://localhost:3000/payment/admin/success/${applicationId}`,
       cancel_url: `http://localhost:5173/dashboard/manager/pending-application`,
     });
@@ -533,8 +532,8 @@ app.post("/payment/user/repay/:id", async (req, res) => {
           quantity: 1,
         },
       ],
-      // ✅ ৩৫০ নাম্বার লাইনের আশেপাশে success_url পরিবর্তন করুন:
-      success_url: `http://localhost:5173/dashboard/payment-history`, // বা আপনার সাকসেস পেজ
+      // 
+      success_url: `http://localhost:5173/dashboard/payment-history`, 
       cancel_url: `http://localhost:5173/dashboard/my-applications`,
     });
 
@@ -769,8 +768,7 @@ app.post("/reviews", async (req, res) => {
   try {
     const review = {
       ...req.body,
-      // রেটিং যদি স্ট্রিং হিসেবে আসে তবে সেটাকে নাম্বার করে দিচ্ছি 
-      // যাতে ফ্রন্টএন্ডে স্টার দেখাতে সুবিধা হয়
+      // For rating feedback
       rating: Number(req.body.rating), 
       createdAt: new Date()
     };
@@ -795,7 +793,7 @@ app.get("/reviews", async (req, res) => {
   }
 });
 
-// অ্যাডমিন যেন রিভিউ ডিলিট করতে পারে
+// Review delete for admin
 app.delete("/reviews/:id", async (req, res) => {
   try {
     const id = req.params.id;
@@ -813,7 +811,7 @@ app.delete("/reviews/:id", async (req, res) => {
 
 // ================= START =================
 app.listen(port, () => {
-  console.log(`✅ Server running on port ${port}`);
+  console.log(`Server running on port ${port}`);
 });
 
 // EXPORT FOR VERCEL
